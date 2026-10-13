@@ -2,7 +2,7 @@
 //! Phone dialler pop-up: a keypad that "dials" an IP by lighting each digit and playing its tone.
 //! Created on demand by the finance screen (`pd.Create(100, 100)`), not a slot screen.
 
-use uplink_engine::sound;
+use uplink_engine::{gl, sound};
 
 use crate::app::opengl::display;
 use crate::app::opengl_interface::button_assignbitmaps;
@@ -55,34 +55,55 @@ impl PhoneDialler {
     }
 
     /// C++ `PhoneDialler::DialNumber(char *number)`: lights each digit and plays its tone.
+    // PORT: the C++ drew and presented a frame per digit (`display()`) inside a 110 ms busy wait,
+    // freezing the game. A macroquad frame can only be presented from the async main loop, so the
+    // dial is recorded here and played by `opengl_run` through [`play_dial`] once this frame ends,
+    // with input and game updates paused as in the C++. The caller's code after `Remove` (the
+    // connection) has already run by then, so the dialler is drawn over the screen it led to.
     pub fn dial_number(&mut self, g: &mut Ctx, number: &str) {
         if !self.is_visible(g) {
             return;
         }
+        if let Some(bg) = g.ecl.get_button("dialler_bg") {
+            g.pending_dial = Some((bg.x + 10, bg.y + 10, number.to_string()));
+        }
+    }
+}
 
-        let bytes = number.as_bytes();
-        for (i, &ch) in bytes.iter().enumerate() {
-            if (b'1'..=b'9').contains(&ch) {
-                g.ecl.highlight_button(BUTTON_NAMES[(ch - b'1') as usize]);
+/// The body of the C++ `DialNumber` loop, one presented frame at a time: for each digit 1..9 the
+/// key is lit, the number so far shown and the tone played, then the frame is held for 110 ms.
+pub async fn play_dial(g: &mut Ctx, x: i32, y: i32, number: &str) {
+    let mut pd = PhoneDialler {};
+    pd.create_at(g, x, y);
 
-                // C++ `sprintf(caption, "%s", number); caption[i+1] = 0;`
-                let caption = String::from_utf8_lossy(&bytes[..=i]).into_owned();
-                let dialler_number = g.ecl.get_button_mut("dialler_number");
-                debug_assert!(dialler_number.is_some(), "UplinkAssert(dialler_number)");
-                if let Some(b) = dialler_number {
-                    b.set_caption(&caption);
+    let bytes = number.as_bytes();
+    for (i, &ch) in bytes.iter().enumerate() {
+        if (b'1'..=b'9').contains(&ch) {
+            g.ecl.highlight_button(BUTTON_NAMES[(ch - b'1') as usize]);
+
+            // C++ `sprintf(caption, "%s", number); caption[i+1] = 0;`
+            let caption = String::from_utf8_lossy(&bytes[..=i]).into_owned();
+            if let Some(b) = g.ecl.get_button_mut("dialler_number") {
+                b.set_caption(&caption);
+            }
+
+            let filename = format!("sounds/{}.wav", ch - b'0');
+            sound::play_sound(&filename, None, true);
+
+            // Pause for a small time
+            let starttime = g.ecl.get_accurate_time();
+            while g.ecl.get_accurate_time() - starttime < 110 {
+                if g.app.closed() {
+                    break;
                 }
+                gl::begin_frame(macroquad::color::BLACK);
                 display(g);
-
-                let filename = format!("sounds/{}.wav", ch - b'0');
-                sound::play_sound(&filename, None, true);
-
-                // Pause for a small time
-                let starttime = g.ecl.get_accurate_time();
-                while g.ecl.get_accurate_time() - starttime < 110 {}
+                macroquad::window::next_frame().await;
             }
         }
     }
+
+    pd.remove(g);
 }
 
 impl InterfaceScreen for PhoneDialler {

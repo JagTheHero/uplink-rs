@@ -149,6 +149,9 @@ pub async fn opengl_run(g: &mut Ctx) {
         display(g);
         macroquad::window::next_frame().await;
         g.run_deferred();
+        if let Some((x, y, number)) = g.pending_dial.take() {
+            crate::interface::localinterface::phonedialler::play_dial(g, x, y, &number).await;
+        }
         // Without vsync (e.g. a virtual X server) the loop would spin flat out; cap it near 100 fps.
         let frame = Instant::now().duration_since(frame_start);
         if frame < MIN_FRAME_TIME {

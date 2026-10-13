@@ -28,13 +28,16 @@ pub struct Ctx {
     pub lan_monitor: LanMonitor,
     /// The C++ `SecurityMonitor` statics (security systems watching the current connection).
     pub security_monitor: SecurityMonitor,
+    /// A number `PhoneDialler::dial_number` asked to dial, with the keypad's position; played by
+    /// `opengl_run` (see [`crate::interface::localinterface::phonedialler::play_dial`]).
+    pub pending_dial: Option<(i32, i32, String)>,
     deferred: Vec<Deferred>,
     running_deferred: bool,
 }
 
 impl Ctx {
     pub fn new(app: App, game: Game) -> Self {
-        Ctx { app, game, ecl: Eclipse::new(), svb: Vanbakel::default(), lan_monitor: LanMonitor::default(), security_monitor: SecurityMonitor::default(), deferred: Vec::new(), running_deferred: false }
+        Ctx { app, game, ecl: Eclipse::new(), svb: Vanbakel::default(), lan_monitor: LanMonitor::default(), security_monitor: SecurityMonitor::default(), pending_dial: None, deferred: Vec::new(), running_deferred: false }
     }
 
     /// `game->GetWorld()`. Panics if no game is running (the C++ asserted).
