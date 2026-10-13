@@ -2,7 +2,7 @@
 //!
 //! The song is decoded by the pure Rust port in [`crate::mikmod`] on a background thread, which
 //! also feeds the sound card (ALSA on Linux, through the binding macroquad's audio already links; cpal
-//! cannot coexist with it; WinMM `waveOut` on Windows). The thread blocks on the card's ~400 ms buffer, never the game thread:
+//! cannot coexist with it; WinMM `waveOut` on Windows, a CoreAudio `AudioQueue` on macOS). The thread blocks on the card's ~400 ms buffer, never the game thread:
 //! `play`, `set_volume`, `stop` and `finished` only touch atomics. Without a sound device (or on
 //! platforms without an output backend yet) the thread renders at real-time speed and discards the
 //! audio, so `finished()` still fires after the song's true length and the playlist keeps cycling.
@@ -255,8 +255,166 @@ mod pcm {
     }
 }
 
+/// macOS output through a CoreAudio `AudioQueue`, built like the Windows backend: four buffers of
+/// one chunk each, handed back by the queue's callback when played, so `write` blocks when all four
+/// are queued.
+#[cfg(target_os = "macos")]
+mod pcm {
+    use std::ffi::c_void;
+    use std::ptr;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    const K_AUDIO_FORMAT_LINEAR_PCM: u32 = u32::from_be_bytes(*b"lpcm");
+    const K_FLAG_SIGNED_INTEGER: u32 = 1 << 2;
+    const K_FLAG_PACKED: u32 = 1 << 3;
+    const NUM_BUFFERS: usize = 4;
+    /// Bytes per buffer: one chunk of 4096 stereo 16 bit frames.
+    const BUFFER_BYTES: u32 = 4096 * 4;
+
+    #[repr(C)]
+    struct AudioStreamBasicDescription {
+        sample_rate: f64,
+        format_id: u32,
+        format_flags: u32,
+        bytes_per_packet: u32,
+        frames_per_packet: u32,
+        bytes_per_frame: u32,
+        channels_per_frame: u32,
+        bits_per_channel: u32,
+        reserved: u32,
+    }
+
+    #[repr(C)]
+    struct AudioQueueBuffer {
+        data_bytes_capacity: u32,
+        data: *mut c_void,
+        data_byte_size: u32,
+        user_data: *mut c_void,
+        packet_description_capacity: u32,
+        packet_descriptions: *mut c_void,
+        packet_description_count: u32,
+    }
+
+    type AudioQueueRef = *mut c_void;
+    type Callback = extern "C" fn(*mut c_void, AudioQueueRef, *mut AudioQueueBuffer);
+
+    #[link(name = "AudioToolbox", kind = "framework")]
+    extern "C" {
+        fn AudioQueueNewOutput(fmt: *const AudioStreamBasicDescription, cb: Callback, user: *mut c_void, run_loop: *const c_void, mode: *const c_void, flags: u32, out: *mut AudioQueueRef) -> i32;
+        fn AudioQueueAllocateBuffer(q: AudioQueueRef, size: u32, out: *mut *mut AudioQueueBuffer) -> i32;
+        fn AudioQueueEnqueueBuffer(q: AudioQueueRef, buf: *mut AudioQueueBuffer, n: u32, descs: *const c_void) -> i32;
+        fn AudioQueueStart(q: AudioQueueRef, at: *const c_void) -> i32;
+        fn AudioQueueStop(q: AudioQueueRef, immediate: u8) -> i32;
+        fn AudioQueueDispose(q: AudioQueueRef, immediate: u8) -> i32;
+    }
+
+    /// Buffers the queue is not playing, as addresses.
+    type FreeList = Mutex<Vec<usize>>;
+
+    extern "C" fn done(user: *mut c_void, _q: AudioQueueRef, buf: *mut AudioQueueBuffer) {
+        // SAFETY: `user` is the boxed free list, which outlives the queue (disposed first in Drop).
+        let free = unsafe { &*(user as *const FreeList) };
+        free.lock().unwrap().push(buf as usize);
+    }
+
+    /// A playback handle for 44.1 kHz stereo signed 16 bit.
+    pub struct Pcm {
+        queue: AudioQueueRef,
+        all: Vec<usize>,
+        free: Box<FreeList>,
+        started: bool,
+    }
+
+    impl Pcm {
+        pub fn open(rate: u32) -> Option<Pcm> {
+            let fmt = AudioStreamBasicDescription {
+                sample_rate: rate as f64,
+                format_id: K_AUDIO_FORMAT_LINEAR_PCM,
+                format_flags: K_FLAG_SIGNED_INTEGER | K_FLAG_PACKED,
+                bytes_per_packet: 4,
+                frames_per_packet: 1,
+                bytes_per_frame: 4,
+                channels_per_frame: 2,
+                bits_per_channel: 16,
+                reserved: 0,
+            };
+            let free: Box<FreeList> = Box::new(Mutex::new(Vec::new()));
+            let mut queue = ptr::null_mut();
+            // SAFETY: plain AudioToolbox calls; a null run loop makes the queue call `done` on its own thread.
+            unsafe {
+                let user = &*free as *const FreeList as *mut c_void;
+                if AudioQueueNewOutput(&fmt, done, user, ptr::null(), ptr::null(), 0, &mut queue) != 0 {
+                    return None;
+                }
+                let mut all = Vec::new();
+                for _ in 0..NUM_BUFFERS {
+                    let mut buf = ptr::null_mut();
+                    if AudioQueueAllocateBuffer(queue, BUFFER_BYTES, &mut buf) != 0 {
+                        AudioQueueDispose(queue, 1);
+                        return None;
+                    }
+                    all.push(buf as usize);
+                }
+                *free.lock().unwrap() = all.clone();
+                Some(Pcm { queue, all, free, started: false })
+            }
+        }
+
+        /// Blocks until a buffer is free. Returns false when the device is unusable.
+        pub fn write(&mut self, samples: &[i16]) -> bool {
+            let start = Instant::now();
+            let buf = loop {
+                if let Some(b) = self.free.lock().unwrap().pop() {
+                    break b as *mut AudioQueueBuffer;
+                }
+                if start.elapsed() > Duration::from_secs(5) {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            };
+            // SAFETY: `buf` came from this queue and is not queued; the copy is clamped to its capacity.
+            unsafe {
+                let bytes = (samples.len() * 2).min((*buf).data_bytes_capacity as usize);
+                ptr::copy_nonoverlapping(samples.as_ptr().cast::<u8>(), (*buf).data.cast::<u8>(), bytes);
+                (*buf).data_byte_size = bytes as u32;
+                if AudioQueueEnqueueBuffer(self.queue, buf, 0, ptr::null()) != 0 {
+                    self.free.lock().unwrap().push(buf as usize);
+                    return false;
+                }
+                if !self.started {
+                    self.started = AudioQueueStart(self.queue, ptr::null()) == 0;
+                    return self.started;
+                }
+            }
+            true
+        }
+
+        pub fn drain(&mut self) {
+            let start = Instant::now();
+            while self.free.lock().unwrap().len() < NUM_BUFFERS && start.elapsed() < Duration::from_secs(2) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+
+        pub fn drop_now(&mut self) {
+            // SAFETY: valid queue; an immediate stop returns every queued buffer.
+            unsafe { AudioQueueStop(self.queue, 1) };
+            self.started = false;
+            *self.free.lock().unwrap() = self.all.clone();
+        }
+    }
+
+    impl Drop for Pcm {
+        fn drop(&mut self) {
+            // SAFETY: disposed once, immediately, before the free list it calls into is dropped.
+            unsafe { AudioQueueDispose(self.queue, 1) };
+        }
+    }
+}
+
 /// No output backend on this platform yet: the song is paced in real time and discarded.
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 mod pcm {
     pub struct Pcm;
     impl Pcm {

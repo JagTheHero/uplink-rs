@@ -9,6 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - run: cargo test --release -p uplink-engine --target aarch64-apple-darwin
       - run: cargo build --release -p uplink --target aarch64-apple-darwin
       - run: cargo build --release -p uplink --target x86_64-apple-darwin
       - run: |
