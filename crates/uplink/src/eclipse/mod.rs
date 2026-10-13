@@ -608,11 +608,20 @@ impl Eclipse {
                 clear(g, x, y, w, h);
             }
         }
+        // PORT: the C++ only redrew dirty buttons over the last frame. A super highlight is sent to the
+        // back but dirtied every frame, while the panels behind it are not, so it showed on top of
+        // them. Every button is redrawn every frame here, so each super highlight is drawn just
+        // before the button it surrounds instead of at the back, where the panels would cover it.
         let snapshot: Vec<Button> = g.ecl.buttons.iter().rev().filter(|b| b.x >= 0 && b.y >= 0).cloned().collect();
         for b in snapshot {
             // The button may have been removed by an earlier draw callback.
-            if g.ecl.get_button(&b.name).is_none() {
+            if g.ecl.get_button(&b.name).is_none() || b.name.starts_with("Ecl_superhighlight ") {
                 continue;
+            }
+            if g.ecl.is_super_highlighted(&b.name) {
+                if let Some(h) = g.ecl.get_button(&superhighlight_name(&b.name)).filter(|h| h.x >= 0 && h.y >= 0).cloned() {
+                    Self::draw_button_snapshot(g, &h);
+                }
             }
             Self::draw_button_snapshot(g, &b);
         }
