@@ -1,0 +1,22 @@
+name: macOS build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - run: cargo build --release -p uplink --target aarch64-apple-darwin
+      - run: cargo build --release -p uplink --target x86_64-apple-darwin
+      - run: |
+          lipo -create -output uplink \
+            target/aarch64-apple-darwin/release/uplink \
+            target/x86_64-apple-darwin/release/uplink
+          ./uplink; test $? -eq 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uplink-macos
+          path: uplink
