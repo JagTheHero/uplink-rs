@@ -21,6 +21,9 @@ or [Steam](https://store.steampowered.com/app/1510/Uplink/).
 - A Rust toolchain (stable, edition 2021) with `cargo`.
 - Linux: X11 (OpenGL through GLX) and ALSA (`libasound` and its development files to build).
 - Windows: see `docs/WINDOWS.md` for cross-compiling a 64-bit `uplink.exe`.
+  Known issue: under Wine or Proton with an NVIDIA graphics card the Windows build may show a black
+  window (sound and clicks still work). On Linux, use the native Linux build instead. Reports from
+  real Windows machines, especially with NVIDIA cards, are welcome.
 - macOS (experimental): builds as a universal binary (Intel and Apple Silicon) through the
   `macOS build` GitHub Actions workflow, and should work, but has not been play-tested on a Mac yet.
   The release build is unsigned; if macOS blocks it, run `xattr -d com.apple.quarantine uplink`.
