@@ -3,7 +3,7 @@
 A Rust port of **Uplink** (Introversion Software, 2001), made from the C++ source on the Uplink
 Developer CD (version 1.31). The goal is the same game, with the same look and behaviour: where the
 port and the original disagree, the original is right and the port has a bug. It is built on
-macroquad (window, OpenGL, audio) and runs on Linux and Windows.
+macroquad (window, OpenGL, audio) and runs on Linux and Windows, with an experimental macOS build.
 
 **You need your own copy of Uplink to play.** This repository contains no game data. The port reads
 the `.dat` archives from an installed copy of Uplink and refuses to start without one.
@@ -21,6 +21,11 @@ or [Steam](https://store.steampowered.com/app/1510/Uplink/).
 - A Rust toolchain (stable, edition 2021) with `cargo`.
 - Linux: X11 (OpenGL through GLX) and ALSA (`libasound` and its development files to build).
 - Windows: see `docs/WINDOWS.md` for cross-compiling a 64-bit `uplink.exe`.
+- macOS (experimental): builds as a universal binary (Intel and Apple Silicon) through the
+  `macOS build` GitHub Actions workflow, and should work, but has not been play-tested on a Mac yet.
+  The release build is unsigned; if macOS blocks it, run `xattr -d com.apple.quarantine uplink`.
+  Music output on macOS is new and untested. If you try it, please open an issue and tell us how
+  it went.
 - English only.
 
 ## Build and run
