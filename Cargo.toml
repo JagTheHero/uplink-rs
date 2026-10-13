@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["crates/engine", "crates/uplink"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "LicenseRef-Uplink-DevCD"
+
+[patch.crates-io]
+# quad-snd 0.2.8 with its ALSA audio thread paced to real time (vendor/quad-snd/src/alsa_snd.rs)
+quad-snd = { path = "vendor/quad-snd" }
+
+[workspace.dependencies]
+macroquad = { version = "0.4.16", default-features = false, features = ["audio"] }
+image = { version = "0.25", default-features = false, features = ["tiff", "png"] }
+tiff = "0.11"
+serde = { version = "1", features = ["derive"] }
+quad-alsa-sys = "0.3.2"
+serde_json = "1"
+rand = "0.8"
+libc = "0.2"
+skrifa = { version = "0.44", default-features = false, features = ["std"] }
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3

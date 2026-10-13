@@ -1,0 +1,15 @@
+[package]
+name = "uplink-engine"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+macroquad.workspace = true
+image.workspace = true
+tiff.workspace = true
+skrifa.workspace = true
+
+# cpal cannot be used here: it and macroquad's audio (quad-snd -> quad-alsa-sys) both declare
+# `links = "alsa"`, so music talks to ALSA through the binding macroquad already pulls in.
+[target.'cfg(target_os = "linux")'.dependencies]
+quad-alsa-sys.workspace = true

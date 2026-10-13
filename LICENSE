@@ -1,0 +1,74 @@
+uplink-rs: a Rust port of Uplink
+
+Uplink and the Uplink source code are copyright (c) Introversion Software.
+
+This project is a derivative of the Uplink 1.31 source code released on the
+Uplink Developer CD, and is distributed under the Uplink Developers License
+that came with that CD. Introversion Software has given the author written
+permission to publish this source code, and to distribute free Windows, Linux
+and macOS builds that require an installed copy of Uplink, under that license.
+
+No Uplink game data is included. You need your own copy of Uplink to run it.
+
+The full text of the Uplink Developers License follows.
+
+----------------------------------------------------------------------------
+
+Uplink Developers License
+
+COPYRIGHT (C) 2003,
+Introversion Software, Ltd.
+Winchester House, 36 Winchester Road, Walton-On-Thames, Surry, KT12 2RH, UK
+
+PREAMBLE
+At Introversion Software we believe that a game should not die simply because it has reached the end of it's corporate development cycle. That said, a open-source unlimited distribution of the game is not practical for two reasons:
+1. It would be in breach of the licensing agreements that we have with third party publishers
+2. Due to the "hand-to-mouth" nature of Independent Games publishing a nominal fee for the source code of previous projects can go a long way to ensure the funding of future development projects
+
+By releasing the source code we hope that Uplink will be modified in a variety of different ways:
+· With additional functionality
+· To Different Platforms
+· To Different Languages
+
+We envisage that Additional functionality will be achieved through the medium of patches and we do not need to regulate this. That said, we must insist that the user has a bone-fide version of Uplink installed and as a consequence stand-alone binaries will be in breach of this agreement.
+
+Different platforms and languages are slightly different. If we were to allow a port to a different platform or language, this would potentially exclude us from entering this market. In addition it may put us in violation of any agreements between us and third party developers whom we had paid to generate the new versions. That said if a port is produced for a platform or language that we had not considered or were not currently involved with, then we would be happy to consider licensing the version from the developer for an agreed royalty.
+
+The fundamentals are simple. If you change uplink and produce a "patch" for a platform that we have sold on, then feel free to distribute it. If you produce a totally new version, contact us and we'll try to work something out.
+
+The above does not constitute a formal offer, and all work conducted without a written agreement between the developer and Introversion is "at risk" and without commitment.
+
+The above PREAMBLE does NOT form part of the agreement. In the event of any in-consistencies or discussions, the Terms and Conditions (as set out below) will take precedence.
+
+
+TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION OF THE UPLINK SOURCE CODE
+
+1.1 This License applies to the computer software known as "Uplink", developed and marketed by Introversion Software Ltd of Winchester House, 36 Winchester Road, Walton-On-Thames, Surry, KT12 2RH, UK (herein referred to as "Introversion" or "Us" or "we" or "our"). The "Program", below, refers to the Uplink executable, and a "work based on the Program" means either the Program or any derivative work under copyright law: that is to say, a work containing the Program or a portion of it, either verbatim or with modifications and/or translated into another language. (Hereinafter, translation is included without limitation in the term "modification".) Each licensee is addressed as "you".
+
+1.2 Activities other than copying, distribution and modification are not covered by this License; they are outside its scope. The act of running the Program is not restricted.
+
+1.3 You may not copy or distribute verbatim copies of the Program's source code as you receive it. However, if you make serious modification to the functionality of the program, then you may distribute only such files as are necessary to share your modifications.
+
+2. You may modify your copy or copies of the Program or any portion of it, thus forming a work based on the Program, and copy and distribute such modifications or work under the terms of Section 1 above, provided that you also meet all of these conditions:
+
+2.1) You must cause the modified files to execute only if a copy of Uplink purchased from Introversion Software (or one of it's licensed distributors), is also installed on the machine. The modified version can require any version of Uplink to be installed, however you must state this in a read-me file attached with the distribution. You may only distribute the files in object or executable form, you may not distribute the source files unless in complete accordance with this license (Para 2).
+
+2.2) You must not release a "stand-alone" binary. By this we mean a version of the Program that will execute without an enforced dependency on installation of a version of Uplink purchased from Introversion or one of its licensed distributors.
+
+2.3) Without the express written permission of Introversion, you will not distribute, in any format any version of the program targeted on "PocketPC", "PalmOS", any other PDA Operating System, "GameCube", "Gameboy" (including "Gameboy Advanced"), "Microsoft X-box", "Sony Playstation", any other game console, Macintosh or any other platforms other than Microsoft Windows (for the PC) or Linux.
+
+2.4) Without the express written permission of Introversion, you will not distribute in any format any non-English version of Uplink.
+
+3. You may not copy, modify, sublicense, or distribute the Program except as expressly provided under this License. Any attempt otherwise to copy, modify, sublicense or distribute the Program is void, and will automatically terminate your rights under this License.
+
+4. You are not required to accept this License, since you have not signed it. However, nothing else grants you permission to modify or distribute the Program or its derivative works. These actions are prohibited by law if you do not accept this License. Therefore, by modifying or distributing the Program (or any work based on the Program), you indicate your acceptance of this License to do so, and all its terms and conditions for copying, distributing or modifying the Program or works based on it.
+
+5. Each time you redistribute the Program (or any work based on the Program), the recipient automatically receives a license from the original licensor to copy, distribute or modify the Program subject to these terms and conditions. You may not impose any further restrictions on the recipients' exercise of the rights granted herein. You are not responsible for enforcing compliance by third parties to this License.
+
+6. If, as a consequence of a court judgement or allegation of patent infringement or for any other reason (not limited to patent issues),conditions are imposed on you (whether by court order, agreement or otherwise) that contradict the conditions of this License, they do not excuse you from the conditions of this License. If you cannot distribute so as to satisfy simultaneously your obligations under this License and any other pertinent obligations, then as a consequence you may not distribute the Program at all.
+
+7. If any portion of this section is held invalid or unenforceable under any particular circumstance, the balance of the section is intended to apply and the section as a whole is intended to apply in other circumstances.
+
+8. This license is governed by UK Law.
+
+END OF TERMS AND CONDITIONS

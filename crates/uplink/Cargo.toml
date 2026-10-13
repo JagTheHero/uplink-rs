@@ -1,0 +1,18 @@
+[package]
+name = "uplink"
+edition.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "uplink"
+path = "src/main.rs"
+
+[dependencies]
+uplink-engine = { path = "../engine" }
+macroquad.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

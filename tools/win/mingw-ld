@@ -1,0 +1,17 @@
+#!/bin/bash
+# gcc-style linker driver for rustc's x86_64-pc-windows-gnu target, backed by rust-lld (see setup.sh).
+# rustc invokes this as if it were x86_64-w64-mingw32-gcc.
+TC="${UPLINK_WIN_TOOLCHAIN:-$HOME/.cache/uplink-win-toolchain}"
+LLD="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld"
+args=(); shared=0
+for a in "$@"; do
+  case "$a" in
+    -m64|-fno-use-linker-plugin|-nodefaultlibs|-nostartfiles|-static-libgcc|-static|-pthread) ;;
+    -shared) shared=1; args+=(--shared) ;;
+    -Wl,*) IFS=',' read -ra parts <<< "${a#-Wl,}"; args+=("${parts[@]}") ;;
+    *) args+=("$a") ;;
+  esac
+done
+entry=mainCRTStartup; shim=shim_exe.o; [ $shared = 1 ] && { entry=DllMainCRTStartup; shim=shim_dll.o; }
+exec "$LLD" -flavor gnu -m i386pep -e "$entry" -L"$TC/lib" "${args[@]}" "$TC/$shim" \
+     -lmsvcrt -lkernel32 -luser32 -lntdll

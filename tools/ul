@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# ul — drive a headless Rust Uplink session for play-testing (Xvfb + xdotool + ImageMagick).
+#
+#   ul start N [--fresh]   start session N (X display :1N0, own HOME under ~/.cache/uplink-ul/N);
+#                          --fresh wipes that HOME first (first run then shows the patch screens)
+#   ul start N --seed      ...with HOME reset to the seed: options at 1024x768 and a saved agent
+#                          "Tester" / password "secret", just past registration (then: ul login N)
+#   ul login N             log in as Tester/secret from the login screen (port or reference)
+#   ul ref N [--fresh|--seed]  start the ORIGINAL game (GOG 1.6 uplink.exe under GE-Proton wine) as
+#                          session N instead, for side-by-side reference shots; same commands apply
+#   ul click N X Y         move there, settle, left click   (coordinates = screenshot pixels)
+#   ul rclick N X Y        right click
+#   ul move N X Y          move only (hover / tooltips)
+#   ul drag N X1 Y1 X2 Y2  left-drag
+#   ul type N "text"       type text
+#   ul key N KEY...        xdotool key names: Return Escape BackSpace Tab F1 F12 ...
+#   ul shot N [FILE]       screenshot (default ~/.cache/uplink-ul/N/shot.png); prints the path
+#   ul buttons N           dump every Eclipse button (name, rect, caption) — needs the F11 hook
+#   ul log N [LINES]       tail the game's stdout/stderr (panics land here)
+#   ul alive N             exit 0 if the game is still running
+#   ul stop N              stop the game and its X server
+#   ul wait N SECS         sleep (the game keeps running)
+#
+# Sound goes to a null ALSA device. The binary is rust/target/debug/uplink (build it first).
+set -u
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+BIN="$ROOT/target/debug/uplink"
+cmd=${1:-}; n=${2:-}
+[ -z "$cmd" ] || [ -z "$n" ] && { sed -n '2,20p' "$0"; exit 2; }
+D="$HOME/.cache/uplink-ul/$n"
+export DISPLAY=":1${n}0"
+unset WAYLAND_DISPLAY
+mkdir -p "$D"
+
+case $cmd in
+start)
+  "$0" stop "$n" >/dev/null 2>&1
+  [ "${3:-}" = "--fresh" ] && rm -rf "$D/home"
+  [ "${3:-}" = "--seed" ] && { rm -rf "$D/home"; cp -a "$HOME/.cache/uplink-ul/seed/home" "$D/home"; }
+  rm -rf "$D/refapp" "$D/prefix"   # this session number is now a port session
+  mkdir -p "$D/home"
+  printf 'pcm.!default { type null }\nctl.!default { type hw card 0 }\n' > "$D/asound.conf"
+  Xvfb "$DISPLAY" -screen 0 1024x768x24 >/dev/null 2>&1 &
+  echo $! > "$D/xvfb.pid"
+  sleep 1
+  data="${UPLINK_DATA:-$HOME/Games/uplink-gog/app}"
+  ( cd "$D" && HOME="$D/home" UPLINK_DATA="$data" \
+      ALSA_CONFIG_PATH="$D/asound.conf" LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=2 UPLINK_NOSOUND=1 UPLINK_DEBUG=1 RUST_BACKTRACE=1 \
+      exec "$BIN" > "$D/game.log" 2>&1 ) &
+  echo $! > "$D/game.pid"
+  sleep 4
+  "$0" alive "$n" && echo "session $n running on $DISPLAY" || { echo "game exited:"; tail -20 "$D/game.log"; exit 1; }
+  ;;
+ref)
+  "$0" stop "$n" >/dev/null 2>&1
+  # The original under Wine needs 0.5-1.7 GB; RAM is shared and capped, so at most 1 runs at a time.
+  waited=0
+  while [ "$(pgrep -c -x uplink.exe)" -ge 1 ]; do
+    [ $waited = 0 ] && echo "another reference game is running (shared RAM cap, 1 at a time); waiting for it to stop..."
+    sleep 10; waited=$((waited+10))
+    [ $waited -ge 900 ] && { echo "a reference is still running after 15 min; try later (keep testing the port meanwhile)"; exit 1; }
+  done
+  W="$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1/files/bin"
+  src="${UPLINK_DATA:-$HOME/Games/uplink-gog/app}"
+  [ "${3:-}" = "--fresh" ] && rm -rf "$D/refapp"
+  [ "${3:-}" = "--seed" ] && rm -rf "$D/refapp/users"
+  if [ ! -d "$D/refapp" ]; then
+    mkdir -p "$D/refapp"
+    cp -a --reflink=auto "$src"/*.dat "$src"/*.dll "$src"/uplink.exe "$D/refapp/"
+    # Skip the "new patch" screens like a configured install would.
+  fi
+  # Skip the "new patch" screens like a configured install would; --seed also brings the saved agent.
+  [ -d "$D/refapp/users" ] || cp -a "$HOME/.cache/uplink-ul/refseed/users" "$D/refapp/"
+  Xvfb "$DISPLAY" -screen 0 1024x768x24 >/dev/null 2>&1 &
+  echo $! > "$D/xvfb.pid"
+  sleep 1
+  # Silence: no Pulse/PipeWire server, no wine audio drivers, null ALSA.
+  printf 'pcm.!default { type null }\nctl.!default { type hw card 0 }\n' > "$D/asound.conf"
+  if [ ! -d "$D/prefix" ]; then
+    # Wine virtual desktop: without a window manager, plain wine windows never get input focus.
+    WINEPREFIX="$D/prefix" WINEDEBUG=-all "$W/wine" reg add 'HKCU\Software\Wine\Explorer' /v Desktop /d Default /f >/dev/null 2>&1
+    WINEPREFIX="$D/prefix" WINEDEBUG=-all "$W/wine" reg add 'HKCU\Software\Wine\Explorer\Desktops' /v Default /d 1024x768 /f >/dev/null 2>&1
+    WINEPREFIX="$D/prefix" "$W/wineserver" -w
+  fi
+  ( cd "$D/refapp" && WINEPREFIX="$D/prefix" WINEDEBUG=-all \
+      WINEDLLOVERRIDES="mscoree,mshtml=;winepulse.drv,winealsa.drv,wineoss.drv=" \
+      PULSE_SERVER=unix:/nonexistent PIPEWIRE_REMOTE=/nonexistent \
+      ALSA_CONFIG_PATH="$D/asound.conf" LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=2 exec "$W/wine" uplink.exe > "$D/game.log" 2>&1 ) &
+  echo $! > "$D/game.pid"
+  sleep 15
+  "$0" alive "$n" && echo "REFERENCE session $n running on $DISPLAY" || { echo "original exited:"; tail -20 "$D/game.log"; exit 1; }
+  ;;
+login)  "$0" click "$n" 150 487; sleep 1.2; "$0" click "$n" 580 556; sleep 5 ;;
+click)  xdotool mousemove $(($3-2)) $(($4-1)); sleep 0.25; xdotool mousemove "$3" "$4"; sleep 0.25; xdotool click 1; sleep 0.3 ;;
+rclick) xdotool mousemove $(($3-2)) $(($4-1)); sleep 0.25; xdotool mousemove "$3" "$4"; sleep 0.25; xdotool click 3; sleep 0.3 ;;
+move)   xdotool mousemove "$3" "$4"; sleep 0.3 ;;
+drag)   xdotool mousemove "$3" "$4"; sleep 0.25; xdotool mousedown 1; sleep 0.2; xdotool mousemove "$5" "$6"; sleep 0.25; xdotool mouseup 1; sleep 0.3 ;;
+type)   xdotool type --delay 40 "$3"; sleep 0.2 ;;
+key)    shift 2; xdotool key --delay 80 "$@"; sleep 0.2 ;;
+shot)   f=${3:-$D/shot.png}; import -window root "$f" && echo "$f" ;;
+buttons)
+  before=$(wc -l < "$D/game.log")
+  xdotool key F11; sleep 0.5
+  tail -n +$((before+1)) "$D/game.log" | sed -n '/E C L I P S E/,/E N D/p' | grep -v '^ANIM'
+  ;;
+log)    tail -n "${3:-40}" "$D/game.log" ;;
+alive)  kill -0 "$(cat "$D/game.pid" 2>/dev/null)" 2>/dev/null ;;
+wait)   sleep "$3" ;;
+stop)
+  kill "$(cat "$D/game.pid" 2>/dev/null)" 2>/dev/null
+  [ -d "$D/prefix" ] && WINEPREFIX="$D/prefix" "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1/files/bin/wineserver" -k 2>/dev/null
+  sleep 0.5
+  kill "$(cat "$D/xvfb.pid" 2>/dev/null)" 2>/dev/null
+  echo stopped
+  ;;
+*) sed -n '2,20p' "$0"; exit 2 ;;
+esac

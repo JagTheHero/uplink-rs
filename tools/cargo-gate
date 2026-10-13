@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Run cargo with at most $UPLINK_GATE_SLOTS (default 3) concurrent builds machine-wide,
+# limited parallelism, and temp files kept off the /tmp tmpfs.
+# Usage (from anywhere inside rust/): tools/cargo-gate check -p uplink --message-format short
+set -u
+lockdir="$HOME/.cache/uplink-rs-gate"
+mkdir -p "$lockdir" "$HOME/.cache/tmp"
+# slot count: env, else the shared file (editable while builds run), else 3
+slots=${UPLINK_GATE_SLOTS:-$(cat "$lockdir/slots" 2>/dev/null || echo 3)}
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}
+export TMPDIR="$HOME/.cache/tmp"
+export CARGO_TERM_COLOR=never
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+waited=0
+while true; do
+  for i in $(seq 1 "$slots"); do
+    exec 9>"$lockdir/slot$i"
+    if flock -n 9; then
+      [ "$waited" -gt 0 ] && echo "[cargo-gate] got slot $i after ${waited}s" >&2
+      nice -n 10 cargo "$@"
+      exit $?
+    fi
+    exec 9>&-
+  done
+  sleep 3; waited=$((waited+3))
+  [ -z "${UPLINK_GATE_SLOTS:-}" ] && slots=$(cat "$lockdir/slots" 2>/dev/null || echo 3)
+  [ $((waited % 60)) -eq 0 ] && echo "[cargo-gate] waiting for a build slot (${waited}s)" >&2
+done

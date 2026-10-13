@@ -1,0 +1,10 @@
+pub mod consequencegenerator;
+pub mod demoplotgenerator;
+pub mod langenerator;
+pub mod missiongenerator;
+pub mod namegenerator;
+pub mod newsgenerator;
+pub mod numbergenerator;
+pub mod plotgenerator;
+pub mod recordgenerator;
+pub mod worldgenerator;
